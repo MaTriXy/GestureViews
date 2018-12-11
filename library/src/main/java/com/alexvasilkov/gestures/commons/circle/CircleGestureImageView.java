@@ -10,12 +10,16 @@ import android.graphics.RectF;
 import android.graphics.Shader.TileMode;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 
 import com.alexvasilkov.gestures.animation.ViewPositionAnimator.PositionUpdateListener;
+import com.alexvasilkov.gestures.internal.DebugOverlay;
+import com.alexvasilkov.gestures.internal.GestureDebug;
+import com.alexvasilkov.gestures.utils.MathUtils;
 import com.alexvasilkov.gestures.views.GestureImageView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 public class CircleGestureImageView extends GestureImageView {
 
@@ -43,8 +47,9 @@ public class CircleGestureImageView extends GestureImageView {
 
         getPositionAnimator().addPositionUpdateListener(new PositionUpdateListener() {
             @Override
-            public void onPositionUpdate(float state, boolean isLeaving) {
-                cornersState = state;
+            public void onPositionUpdate(float position, boolean isLeaving) {
+                float interpolatedPosition = position / getPositionAnimator().getToPosition();
+                cornersState = MathUtils.restrict(interpolatedPosition, 0f, 1f);
             }
         });
     }
@@ -60,6 +65,10 @@ public class CircleGestureImageView extends GestureImageView {
             canvas.rotate(clipRotation, clipRect.centerX(), clipRect.centerY());
             canvas.drawRoundRect(clipRect, rx, ry, bitmapPaint);
             canvas.rotate(-clipRotation, clipRect.centerX(), clipRect.centerY());
+
+            if (GestureDebug.isDrawDebugOverlay()) {
+                DebugOverlay.drawDebug(this, canvas);
+            }
         }
     }
 
@@ -82,6 +91,7 @@ public class CircleGestureImageView extends GestureImageView {
         setup();
     }
 
+    @SuppressWarnings("unused") // Public API
     public void setCircle(boolean isCircle) {
         this.isCircle = isCircle;
         setup();

@@ -1,17 +1,17 @@
 package com.alexvasilkov.gestures;
 
-import android.annotation.TargetApi;
+import android.annotation.SuppressLint;
 import android.graphics.Matrix;
 import android.graphics.RectF;
-import android.os.Build;
-import android.support.annotation.NonNull;
-import android.support.v4.view.ViewPager;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
 
 import com.alexvasilkov.gestures.internal.detectors.RotationGestureDetector;
+
+import androidx.annotation.NonNull;
+import androidx.viewpager.widget.ViewPager;
 
 /**
  * Allows cross movement between view controlled by this {@link GestureController} and it's parent
@@ -22,6 +22,11 @@ public class GestureControllerForPager extends GestureController {
     private static final float SCROLL_THRESHOLD = 15f;
     private static final float OVERSCROLL_THRESHOLD_FACTOR = 4f;
 
+    // Temporary objects
+    private static final Matrix tmpMatrix = new Matrix();
+    private static final RectF tmpRectF = new RectF();
+
+
     /**
      * Because ViewPager will immediately return true from onInterceptTouchEvent() method during
      * settling animation, we will have no chance to prevent it from doing this.
@@ -31,6 +36,7 @@ public class GestureControllerForPager extends GestureController {
     private static final View.OnTouchListener PAGER_TOUCH_LISTENER = new View.OnTouchListener() {
         private boolean isTouchInProgress;
 
+        @SuppressLint("ClickableViewAccessibility") // Not needed for ViewPager
         @Override
         public boolean onTouch(View view, @NonNull MotionEvent event) {
             // ViewPager will steal touch events during settling regardless of
@@ -51,9 +57,6 @@ public class GestureControllerForPager extends GestureController {
             return true; // We should skip view pager touches to prevent some subtle bugs
         }
     };
-
-    private static final int[] locationTmp = new int[2];
-    private static final Matrix matrixTmp = new Matrix();
 
     private final int touchSlop;
 
@@ -76,39 +79,56 @@ public class GestureControllerForPager extends GestureController {
     /**
      * Enables scroll inside {@link ViewPager}
      * (by enabling cross movement between ViewPager and it's child view).
+     *
+     * @param pager Target ViewPager
      */
     public void enableScrollInViewPager(ViewPager pager) {
         viewPager = pager;
+        //noinspection all - ViewPager is not clickable, it is safe to set touch listener
         pager.setOnTouchListener(PAGER_TOUCH_LISTENER);
 
         // Disabling motion event splitting
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-            pager.setMotionEventSplittingEnabled(false);
-        }
+        pager.setMotionEventSplittingEnabled(false);
     }
 
     /**
      * Disables ViewPager scroll. Default is false.
+     *
+     * @param disable Whether to disable ViewPager scroll or not
      */
     public void disableViewPager(boolean disable) {
         isViewPagerDisabled = disable;
     }
 
+    @SuppressLint("ClickableViewAccessibility") // performClick() will be called in super class
     @Override
     public boolean onTouch(@NonNull View view, @NonNull MotionEvent event) {
+        // We need to always receive touch events to pass them to ViewPager (if provided)
+        boolean result = super.onTouch(view, event);
+        return viewPager != null || result;
+    }
+
+    @Override
+    protected boolean onTouchInternal(@NonNull View view, @NonNull MotionEvent event) {
         if (viewPager == null) {
-            return super.onTouch(view, event);
+            return super.onTouchInternal(view, event);
         } else {
-            // Getting motiona event in pager coordinates
+            // Getting motion event in pager coordinates
             MotionEvent pagerEvent = MotionEvent.obtain(event);
             transformToPagerEvent(pagerEvent, view, viewPager);
 
             handleTouch(pagerEvent);
 
-            boolean result = super.onTouch(view, pagerEvent);
+            boolean result = super.onTouchInternal(view, pagerEvent);
             pagerEvent.recycle();
             return result;
         }
+    }
+
+    @Override
+    protected boolean shouldDisallowInterceptTouch(MotionEvent event) {
+        // If ViewPager is set then we'll always disallow touch interception
+        return viewPager != null || super.shouldDisallowInterceptTouch(event);
     }
 
     private void handleTouch(MotionEvent event) {
@@ -130,8 +150,6 @@ public class GestureControllerForPager extends GestureController {
             return super.onDown(event);
         }
 
-        viewPager.requestDisallowInterceptTouchEvent(true);
-
         isSkipViewPager = false;
         isViewPagerInterceptedScroll = false;
         isScrollGestureDetected = false;
@@ -141,8 +159,7 @@ public class GestureControllerForPager extends GestureController {
         viewPagerSkippedX = 0f;
 
         passEventToViewPager(event);
-        super.onDown(event);
-        return true;
+        return super.onDown(event);
     }
 
     @Override
@@ -195,7 +212,7 @@ public class GestureControllerForPager extends GestureController {
         return !hasViewPagerX() && super.onDoubleTapEvent(event);
     }
 
-    /**
+    /*
      * Scrolls ViewPager if view reached bounds. Returns distance at which view can be actually
      * scrolled. Here we will split given distance (dX) into movement of ViewPager and movement
      * of view itself.
@@ -206,10 +223,10 @@ public class GestureControllerForPager extends GestureController {
         }
 
         final State state = getState();
-        final RectF movBounds = getStateController().getMovementBounds(state).getExternalBounds();
+        getStateController().getMovementArea(state, tmpRectF);
 
-        float pagerDx = splitPagerScroll(dx, state, movBounds);
-        pagerDx = skipPagerMovement(pagerDx, state, movBounds);
+        float pagerDx = splitPagerScroll(dx, state, tmpRectF);
+        pagerDx = skipPagerMovement(pagerDx, state, tmpRectF);
         float viewDx = dx - pagerDx;
 
         // Applying pager scroll
@@ -224,7 +241,7 @@ public class GestureControllerForPager extends GestureController {
         return viewDx;
     }
 
-    /**
+    /*
      * Splits x scroll between viewpager and view.
      */
     private float splitPagerScroll(float dx, State state, RectF movBounds) {
@@ -260,7 +277,7 @@ public class GestureControllerForPager extends GestureController {
         }
     }
 
-    /**
+    /*
      * Skips part of pager movement to make it harder scrolling pager when image is zoomed
      * or when image is over-scrolled in y direction.
      */
@@ -274,7 +291,7 @@ public class GestureControllerForPager extends GestureController {
             overscrollThreshold = (state.getY() - movBounds.bottom) / overscrollDist;
         }
 
-        float minZoom = getStateController().getEffectiveMinZoom();
+        float minZoom = getStateController().getFitZoom(state);
         float zoomThreshold = minZoom == 0f ? 0f : state.getZoom() / minZoom - 1f;
 
         float pagerThreshold = Math.max(overscrollThreshold, zoomThreshold);
@@ -324,7 +341,7 @@ public class GestureControllerForPager extends GestureController {
         return viewPagerX < -1 || viewPagerX > 1;
     }
 
-    /**
+    /*
      * Manually scrolls ViewPager and returns actual distance at which pager was scrolled.
      */
     private int performViewPagerScroll(@NonNull MotionEvent event, float pagerDx) {
@@ -387,28 +404,20 @@ public class GestureControllerForPager extends GestureController {
     }
 
     private static void transformToPagerEvent(MotionEvent event, View view, ViewPager pager) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-            matrixTmp.reset();
-            transformMatrixToPager(matrixTmp, view, pager);
-            event.transform(matrixTmp);
-        } else {
-            view.getLocationOnScreen(locationTmp);
-            event.offsetLocation(locationTmp[0], locationTmp[1]);
-            pager.getLocationOnScreen(locationTmp);
-            event.offsetLocation(-locationTmp[0], -locationTmp[1]);
-        }
+        tmpMatrix.reset();
+        transformMatrixToPager(tmpMatrix, view, pager);
+        event.transform(tmpMatrix);
     }
 
-    /**
+    /*
      * Inspired by hidden method View#transformMatrixToGlobal().
      */
-    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
     private static void transformMatrixToPager(Matrix matrix, View view, ViewPager pager) {
-        View parent = (View) view.getParent();
-        if (parent != null && parent != pager) {
-            transformMatrixToPager(matrix, parent, pager);
-        }
-        if (parent != null) {
+        if (view.getParent() instanceof View) {
+            View parent = (View) view.getParent();
+            if (parent != pager) {
+                transformMatrixToPager(matrix, parent, pager);
+            }
             matrix.preTranslate(-parent.getScrollX(), -parent.getScrollY());
         }
 

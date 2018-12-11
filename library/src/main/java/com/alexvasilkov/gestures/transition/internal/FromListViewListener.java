@@ -1,104 +1,55 @@
 package com.alexvasilkov.gestures.transition.internal;
 
-import android.graphics.Rect;
-import android.support.annotation.NonNull;
 import android.view.View;
 import android.widget.AbsListView;
 import android.widget.ListView;
 
-import com.alexvasilkov.gestures.animation.ViewPositionAnimator;
-import com.alexvasilkov.gestures.transition.ViewsCoordinator;
-import com.alexvasilkov.gestures.transition.ViewsTracker;
-import com.alexvasilkov.gestures.transition.ViewsTransitionAnimator;
+import com.alexvasilkov.gestures.transition.tracker.FromTracker;
 
-public class FromListViewListener<ID> implements ViewsCoordinator.OnRequestViewListener<ID> {
+public class FromListViewListener<ID> extends FromBaseListener<ListView, ID> {
 
-    private static final Rect locationParent = new Rect();
-    private static final Rect locationChild = new Rect();
+    public FromListViewListener(ListView list, final FromTracker<ID> tracker, boolean autoScroll) {
+        super(list, tracker, autoScroll);
 
-    private final ListView listView;
-    private final ViewsTracker<ID> tracker;
-    private final ViewsTransitionAnimator<ID> animator;
-
-    private ID id;
-    private boolean scrollHalfVisibleItems;
-
-    public FromListViewListener(@NonNull ListView listView,
-            @NonNull ViewsTracker<ID> tracker,
-            @NonNull ViewsTransitionAnimator<ID> animator) {
-        this.listView = listView;
-        this.tracker = tracker;
-        this.animator = animator;
-
-        this.listView.setOnScrollListener(new ScrollListener());
-        this.animator.addPositionUpdateListener(new UpdateListener());
-    }
-
-    @Override
-    public void onRequestView(@NonNull ID id) {
-        // Trying to find requested view on screen. If it is not currently on screen
-        // or it is not fully visible than we should scroll to it at first.
-        this.id = id;
-        int position = tracker.getPositionForId(id);
-
-        if (position == ViewsTracker.NO_POSITION) {
-            return; // Nothing we can do
+        if (!autoScroll) {
+            // No need to track list view scrolling if auto scroll is disabled
+            return;
         }
 
-        View view = tracker.getViewForPosition(position);
-        if (view == null) {
-            listView.setSelection(position);
-        } else {
-            animator.setFromView(id, view);
+        // Tracking list view scrolling to pick up newly visible views
+        list.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScroll(AbsListView view, int firstVisible, int visibleCount, int total) {
+                final ID id = getAnimator() == null ? null : getAnimator().getRequestedId();
 
-            if (scrollHalfVisibleItems) {
-                listView.getGlobalVisibleRect(locationParent);
-                locationParent.left += listView.getPaddingLeft();
-                locationParent.right -= listView.getPaddingRight();
-                locationParent.top += listView.getPaddingTop();
-                locationParent.bottom -= listView.getPaddingBottom();
-
-                view.getGlobalVisibleRect(locationChild);
-                if (!locationParent.contains(locationChild)
-                        || view.getWidth() > locationChild.width()
-                        || view.getHeight() > locationChild.height()) {
-                    listView.setSelection(position);
-                }
-            }
-        }
-    }
-
-    private class ScrollListener implements AbsListView.OnScrollListener {
-        @Override
-        public void onScroll(AbsListView view, int firstVisible, int visibleCount, int totalCount) {
-            if (id == null) {
-                return; // Nothing to do
-            }
-            for (int position = firstVisible; position < firstVisible + visibleCount; position++) {
-                if (id.equals(tracker.getIdForPosition(position))) {
-                    View from = tracker.getViewForPosition(position);
-                    if (from != null) {
-                        animator.setFromView(id, from);
+                // If view was requested and list is scrolled we should try to find the view again
+                if (id != null) {
+                    int position = tracker.getPositionById(id);
+                    if (position >= firstVisible && position < firstVisible + visibleCount) {
+                        View from = tracker.getViewById(id);
+                        if (from != null) {
+                            // View is found, we can set up 'from' view position now
+                            getAnimator().setFromView(id, from);
+                        }
                     }
                 }
             }
-        }
 
-        @Override
-        public void onScrollStateChanged(AbsListView view, int scrollState) {
-            // No-op
-        }
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+                // No-op
+            }
+        });
     }
 
-    private class UpdateListener implements ViewPositionAnimator.PositionUpdateListener {
-        @Override
-        public void onPositionUpdate(float state, boolean isLeaving) {
-            if (state == 0f && isLeaving) {
-                id = null;
-            }
-            listView.setVisibility(state == 1f && !isLeaving ? View.INVISIBLE : View.VISIBLE);
-            scrollHalfVisibleItems = state == 1f; // Only scroll if we in full mode
-        }
+    @Override
+    boolean isShownInList(ListView list, int pos) {
+        return pos >= list.getFirstVisiblePosition() && pos <= list.getLastVisiblePosition();
+    }
+
+    @Override
+    void scrollToPosition(ListView list, int pos) {
+        list.setSelection(pos);
     }
 
 }

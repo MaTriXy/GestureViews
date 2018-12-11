@@ -1,98 +1,77 @@
 package com.alexvasilkov.gestures.transition.internal;
 
-import android.graphics.Rect;
-import android.support.annotation.NonNull;
-import android.support.v7.widget.RecyclerView;
 import android.view.View;
 
-import com.alexvasilkov.gestures.animation.ViewPositionAnimator;
-import com.alexvasilkov.gestures.transition.ViewsCoordinator;
-import com.alexvasilkov.gestures.transition.ViewsTracker;
-import com.alexvasilkov.gestures.transition.ViewsTransitionAnimator;
+import com.alexvasilkov.gestures.transition.tracker.FromTracker;
 
-public class FromRecyclerViewListener<ID> implements ViewsCoordinator.OnRequestViewListener<ID> {
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.RecyclerView.OnChildAttachStateChangeListener;
 
-    private static final Rect locationParent = new Rect();
-    private static final Rect locationChild = new Rect();
+public class FromRecyclerViewListener<ID> extends FromBaseListener<RecyclerView, ID> {
 
-    private final RecyclerView recyclerView;
-    private final ViewsTracker<ID> tracker;
-    private final ViewsTransitionAnimator<ID> animator;
+    public FromRecyclerViewListener(final RecyclerView list, final FromTracker<ID> tracker,
+            boolean autoScroll) {
 
-    private ID id;
-    private boolean scrollHalfVisibleItems;
+        super(list, tracker, autoScroll);
 
-    public FromRecyclerViewListener(@NonNull RecyclerView recyclerView,
-            @NonNull ViewsTracker<ID> tracker,
-            @NonNull ViewsTransitionAnimator<ID> animator) {
-        this.recyclerView = recyclerView;
-        this.tracker = tracker;
-        this.animator = animator;
+        if (!autoScroll) {
+            // No need to track items views if auto scroll is disabled
+            return;
+        }
 
-        this.recyclerView.addOnChildAttachStateChangeListener(new ChildStateListener());
-        this.animator.addPositionUpdateListener(new UpdateListener());
+        // Tracking attached list items to pick up newly visible views
+        list.addOnChildAttachStateChangeListener(new OnChildAttachStateChangeListener() {
+            @Override
+            public void onChildViewAttachedToWindow(View view) {
+                final ID id = getAnimator() == null ? null : getAnimator().getRequestedId();
+
+                // If view was requested and list is scrolled we should try to find the view again
+                if (id != null) {
+                    int position = list.getChildAdapterPosition(view);
+                    int positionById = tracker.getPositionById(id);
+                    if (position == positionById) {
+                        View from = tracker.getViewById(id);
+                        if (from != null) {
+                            // View is found, we can set up 'from' view position now
+                            getAnimator().setFromView(id, from);
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void onChildViewDetachedFromWindow(View view) {
+                // No-op
+            }
+        });
     }
 
     @Override
-    public void onRequestView(@NonNull ID id) {
-        // Trying to find requested view on screen. If it is not currently on screen
-        // or it is not fully visible than we should scroll to it at first.
-        this.id = id;
-        int position = tracker.getPositionForId(id);
+    boolean isShownInList(RecyclerView list, int pos) {
+        return list.findViewHolderForLayoutPosition(pos) != null;
+    }
 
-        if (position == ViewsTracker.NO_POSITION) {
-            return; // Nothing we can do
-        }
+    @Override
+    void scrollToPosition(RecyclerView list, int pos) {
+        if (list.getLayoutManager() instanceof LinearLayoutManager) {
+            // Centering item in its parent
+            final LinearLayoutManager manager = (LinearLayoutManager) list.getLayoutManager();
+            final boolean isHorizontal = manager.getOrientation() == LinearLayoutManager.HORIZONTAL;
 
-        View view = tracker.getViewForPosition(position);
-        if (view == null) {
-            recyclerView.smoothScrollToPosition(position);
+            int offset = isHorizontal
+                    ? (list.getWidth() - list.getPaddingLeft() - list.getPaddingRight()) / 2
+                    : (list.getHeight() - list.getPaddingTop() - list.getPaddingBottom()) / 2;
+
+            final RecyclerView.ViewHolder holder = list.findViewHolderForAdapterPosition(pos);
+            if (holder != null) {
+                final View view = holder.itemView;
+                offset -= isHorizontal ? view.getWidth() / 2 : view.getHeight() / 2;
+            }
+
+            manager.scrollToPositionWithOffset(pos, offset);
         } else {
-            animator.setFromView(id, view);
-
-            if (scrollHalfVisibleItems) {
-                recyclerView.getGlobalVisibleRect(locationParent);
-                locationParent.left += recyclerView.getPaddingLeft();
-                locationParent.right -= recyclerView.getPaddingRight();
-                locationParent.top += recyclerView.getPaddingTop();
-                locationParent.bottom -= recyclerView.getPaddingBottom();
-
-                view.getGlobalVisibleRect(locationChild);
-                if (!locationParent.contains(locationChild)
-                        || view.getWidth() > locationChild.width()
-                        || view.getHeight() > locationChild.height()) {
-                    recyclerView.smoothScrollToPosition(position);
-                }
-            }
-        }
-    }
-
-    private class ChildStateListener implements RecyclerView.OnChildAttachStateChangeListener {
-        @Override
-        public void onChildViewAttachedToWindow(View view) {
-            int position = recyclerView.getChildAdapterPosition(view);
-            if (id != null && id.equals(tracker.getIdForPosition(position))) {
-                View from = tracker.getViewForPosition(position);
-                if (from != null) {
-                    animator.setFromView(id, from);
-                }
-            }
-        }
-
-        @Override
-        public void onChildViewDetachedFromWindow(View view) {
-            // No-op
-        }
-    }
-
-    private class UpdateListener implements ViewPositionAnimator.PositionUpdateListener {
-        @Override
-        public void onPositionUpdate(float state, boolean isLeaving) {
-            if (state == 0f && isLeaving) {
-                id = null;
-            }
-            recyclerView.setVisibility(state == 1f && !isLeaving ? View.INVISIBLE : View.VISIBLE);
-            scrollHalfVisibleItems = state == 1f; // Only scroll if we in full mode
+            list.scrollToPosition(pos);
         }
     }
 

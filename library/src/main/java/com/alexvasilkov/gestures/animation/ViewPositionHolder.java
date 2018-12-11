@@ -1,9 +1,10 @@
 package com.alexvasilkov.gestures.animation;
 
 import android.os.Build;
-import android.support.annotation.NonNull;
 import android.view.View;
 import android.view.ViewTreeObserver;
+
+import androidx.annotation.NonNull;
 
 /**
  * Helper class that monitors {@link View} position on screen and notifies
@@ -23,7 +24,7 @@ class ViewPositionHolder implements ViewTreeObserver.OnPreDrawListener {
         return true;
     }
 
-    public void init(@NonNull View view, @NonNull OnViewPositionChangeListener listener) {
+    void init(@NonNull View view, @NonNull OnViewPositionChangeListener listener) {
         this.view = view;
         this.listener = listener;
 
@@ -33,7 +34,7 @@ class ViewPositionHolder implements ViewTreeObserver.OnPreDrawListener {
         }
     }
 
-    public void clear() {
+    void clear() {
         if (view != null) {
             view.getViewTreeObserver().removeOnPreDrawListener(this);
         }
@@ -47,15 +48,13 @@ class ViewPositionHolder implements ViewTreeObserver.OnPreDrawListener {
         isPaused = false;
     }
 
-    public void pause(boolean paused) {
+    void pause(boolean paused) {
         if (isPaused == paused) {
             return;
         }
 
         isPaused = paused;
-        if (!paused) {
-            update();
-        }
+        update();
     }
 
     private void update() {
@@ -75,7 +74,7 @@ class ViewPositionHolder implements ViewTreeObserver.OnPreDrawListener {
         }
     }
 
-    public interface OnViewPositionChangeListener {
+    interface OnViewPositionChangeListener {
         void onViewPositionChanged(@NonNull ViewPosition position);
     }
 

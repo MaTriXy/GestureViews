@@ -2,12 +2,14 @@ package com.alexvasilkov.gestures.sample.ex.image.pager;
 
 import android.os.Bundle;
 
+import androidx.viewpager.widget.ViewPager;
+
 import com.alexvasilkov.gestures.commons.RecyclePagerAdapter;
 import com.alexvasilkov.gestures.sample.R;
 import com.alexvasilkov.gestures.sample.base.BaseSettingsActivity;
 import com.alexvasilkov.gestures.views.GestureImageView;
 
-import androidx.viewpager.widget.ViewPager;
+import java.util.Objects;
 
 /**
  * This example demonstrates usage of {@link GestureImageView} within ViewPager.<br>
@@ -28,6 +30,7 @@ public class ViewPagerActivity extends BaseSettingsActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.image_pager_screen);
+        setTitle(R.string.example_images_in_pager);
         setInfoText(R.string.info_image_pager);
 
         // Initializing ViewPager
@@ -39,7 +42,7 @@ public class ViewPagerActivity extends BaseSettingsActivity {
     @Override
     protected void onSettingsChanged() {
         // Applying settings from toolbar menu, see BaseExampleActivity
-        viewPager.getAdapter().notifyDataSetChanged();
+        Objects.requireNonNull(viewPager.getAdapter()).notifyDataSetChanged();
     }
 
 }

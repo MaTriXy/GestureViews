@@ -12,6 +12,10 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.widget.ImageView;
 
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.alexvasilkov.gestures.GestureController;
 import com.alexvasilkov.gestures.GestureControllerForPager;
 import com.alexvasilkov.gestures.Settings;
@@ -25,10 +29,6 @@ import com.alexvasilkov.gestures.views.interfaces.AnimatorView;
 import com.alexvasilkov.gestures.views.interfaces.ClipBounds;
 import com.alexvasilkov.gestures.views.interfaces.ClipView;
 import com.alexvasilkov.gestures.views.interfaces.GestureView;
-
-import androidx.annotation.DrawableRes;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 /**
  * {@link ImageView} implementation controlled by {@link GestureController}
@@ -97,6 +97,7 @@ public class GestureImageView extends ImageView
     /**
      * {@inheritDoc}
      */
+    @NonNull
     @Override
     public GestureControllerForPager getController() {
         return controller;
@@ -105,6 +106,7 @@ public class GestureImageView extends ImageView
     /**
      * {@inheritDoc}
      */
+    @NonNull
     @Override
     public ViewPositionAnimator getPositionAnimator() {
         if (positionAnimator == null) {
@@ -124,21 +126,6 @@ public class GestureImageView extends ImageView
     @Override
     public void clipBounds(@Nullable RectF rect) {
         clipBoundsHelper.clipView(rect, 0f);
-    }
-
-    /**
-     * Crops bitmap as it is seen inside movement area: {@link Settings#setMovementArea(int, int)}.
-     * Result will be delivered to provided snapshot listener.
-     *
-     * @param listener Snapshot listener
-     * @deprecated Use {@link #crop()} method instead.
-     */
-    @SuppressWarnings({ "deprecation", "unused" }) // Public API
-    @Deprecated
-    public void getSnapshot(OnSnapshotLoadedListener listener) {
-        if (getDrawable() != null) {
-            listener.onSnapshotLoaded(crop());
-        }
     }
 
     /**
@@ -211,7 +198,7 @@ public class GestureImageView extends ImageView
         }
     }
 
-    protected void applyState(State state) {
+    protected void applyState(@NonNull State state) {
         state.get(imageMatrix);
         setImageMatrix(imageMatrix);
     }
@@ -224,16 +211,6 @@ public class GestureImageView extends ImageView
         } else {
             return context.getResources().getDrawable(id);
         }
-    }
-
-
-    /**
-     * @deprecated Use {@link #crop()} method instead.
-     */
-    @SuppressWarnings("WeakerAccess") // Public API
-    @Deprecated
-    public interface OnSnapshotLoadedListener {
-        void onSnapshotLoaded(Bitmap bitmap);
     }
 
 }

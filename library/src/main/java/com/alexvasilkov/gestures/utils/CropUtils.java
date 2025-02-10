@@ -6,6 +6,8 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 
+import androidx.annotation.Nullable;
+
 import com.alexvasilkov.gestures.GestureController;
 import com.alexvasilkov.gestures.Settings;
 import com.alexvasilkov.gestures.State;
@@ -21,30 +23,18 @@ public class CropUtils {
      * @param controller Image controller
      * @return Cropped image part
      */
-    @SuppressWarnings("deprecation") // We'll clean it up once deprecated method is removed
+    @Nullable
     public static Bitmap crop(Drawable drawable, GestureController controller) {
-        controller.stopAllAnimations();
-        controller.updateState(); // Applying state restrictions
-        return crop(drawable, controller.getState(), controller.getSettings());
-    }
-
-    /**
-     * Crops image drawable into bitmap according to current image position.
-     *
-     * @param drawable Image drawable
-     * @param state Image state
-     * @param settings Image settings
-     * @return Cropped image part
-     * @deprecated Use {@link #crop(Drawable, GestureController)} instead
-     */
-    @SuppressWarnings("DeprecatedIsStillUsed")
-    @Deprecated
-    public static Bitmap crop(Drawable drawable, State state, Settings settings) {
         if (drawable == null) {
             return null;
         }
 
-        float zoom = state.getZoom();
+        controller.stopAllAnimations();
+        controller.updateState(); // Applying state restrictions
+
+        final Settings settings = controller.getSettings();
+        final State state = controller.getState();
+        final float zoom = state.getZoom();
 
         // Computing crop size for base zoom level (zoom == 1)
         int width = Math.round(settings.getMovementAreaW() / zoom);

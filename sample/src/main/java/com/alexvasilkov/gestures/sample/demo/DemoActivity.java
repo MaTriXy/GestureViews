@@ -1,11 +1,21 @@
 package com.alexvasilkov.gestures.sample.demo;
 
+import android.animation.ObjectAnimator;
+import android.animation.StateListAnimator;
+import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.os.Build;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.alexvasilkov.android.commons.state.InstanceState;
 import com.alexvasilkov.android.commons.texts.SpannableBuilder;
@@ -14,7 +24,6 @@ import com.alexvasilkov.events.Events;
 import com.alexvasilkov.events.Events.Failure;
 import com.alexvasilkov.events.Events.Result;
 import com.alexvasilkov.gestures.commons.DepthPageTransformer;
-import com.alexvasilkov.gestures.commons.RecyclePagerAdapter;
 import com.alexvasilkov.gestures.sample.R;
 import com.alexvasilkov.gestures.sample.base.BaseSettingsActivity;
 import com.alexvasilkov.gestures.sample.demo.adapter.EndlessRecyclerAdapter;
@@ -29,11 +38,7 @@ import com.alexvasilkov.gestures.views.GestureImageView;
 import com.googlecode.flickrjandroid.photos.Photo;
 
 import java.util.List;
-
-import androidx.appcompat.widget.Toolbar;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.viewpager.widget.ViewPager;
+import java.util.Objects;
 
 /**
  * Advanced usage example that demonstrates images animation from RecyclerView into ViewPager.
@@ -46,11 +51,11 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
     private static final int NO_POSITION = -1;
 
     private ViewHolder views;
-    private ViewsTransitionAnimator imageAnimator;
+    private ViewsTransitionAnimator<?> imageAnimator;
     private ViewsTransitionAnimator<Integer> listAnimator;
     private PhotoListAdapter gridAdapter;
     private PhotoPagerAdapter pagerAdapter;
-    private ViewPager.OnPageChangeListener pagerListener;
+    private ViewPager2.OnPageChangeCallback pagerListener;
 
     @InstanceState
     private int savedPagerPosition = NO_POSITION;
@@ -73,6 +78,8 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
         getSupportActionBarNotNull().setDisplayHomeAsUpEnabled(true);
         getSupportActionBarNotNull().setDisplayShowTitleEnabled(false);
 
+        setAppBarStateListAnimator(views.appBar);
+
         initDecorMargins();
         initTopImage();
         initGrid();
@@ -86,7 +93,7 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
         saveScreenState();
         super.onSaveInstanceState(outState);
         clearScreenState(); // We don't want to restore state if activity instance is not destroyed
@@ -112,14 +119,12 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
      * Adjusting margins and paddings to fit translucent decor.
      */
     private void initDecorMargins() {
-        if (DecorUtils.isCanHaveTransparentDecor()) {
-            Views.getParams(views.appBar).height += DecorUtils.getStatusBarHeight(this);
-        }
-        DecorUtils.paddingForStatusBar(views.toolbar, true);
-        DecorUtils.paddingForStatusBar(views.pagerToolbar, true);
-        DecorUtils.paddingForStatusBar(views.fullImageToolbar, true);
-        DecorUtils.paddingForNavBar(views.grid);
-        DecorUtils.marginForNavBar(views.pagerTitle);
+        DecorUtils.size(views.appBar, Gravity.TOP);
+        DecorUtils.padding(views.toolbar, Gravity.TOP);
+        DecorUtils.padding(views.pagerToolbar, Gravity.TOP);
+        DecorUtils.padding(views.fullImageToolbar, Gravity.TOP);
+        DecorUtils.padding(views.grid, Gravity.BOTTOM);
+        DecorUtils.margin(views.pagerTitle, Gravity.BOTTOM);
     }
 
     /**
@@ -187,9 +192,9 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
      */
     private void initPager() {
         // Setting up pager adapter
-        pagerAdapter = new PhotoPagerAdapter(views.pager, getSettingsController());
+        pagerAdapter = new PhotoPagerAdapter(getSettingsController());
 
-        pagerListener = new ViewPager.SimpleOnPageChangeListener() {
+        pagerListener = new ViewPager2.OnPageChangeCallback() {
             @Override
             public void onPageSelected(int position) {
                 onPhotoInPagerSelected(position);
@@ -197,8 +202,8 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
         };
 
         views.pager.setAdapter(pagerAdapter);
-        views.pager.addOnPageChangeListener(pagerListener);
-        views.pager.setPageTransformer(true, new DepthPageTransformer());
+        views.pager.registerOnPageChangeCallback(pagerListener);
+        views.pager.setPageTransformer(new DepthPageTransformer());
 
         // Setting up pager toolbar
         views.pagerToolbar.setNavigationIcon(R.drawable.ic_arrow_back_white_24dp);
@@ -211,8 +216,12 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
                 showSystemUi(!isSystemUiShown());
             }
         });
-        getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
-                visibility -> views.pagerToolbar.animate().alpha(isSystemUiShown() ? 1f : 0f));
+
+        DecorUtils.onInsetsChanged(views.pagerToolbar, () -> {
+            float alpha = isSystemUiShown() ? 1f : 0f;
+            views.pagerToolbar.animate().alpha(alpha);
+            views.pagerTitle.animate().alpha(alpha);
+        });
     }
 
     /**
@@ -226,7 +235,7 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
             SpannableBuilder title = new SpannableBuilder(DemoActivity.this);
 
             title.append(photo.getTitle()).append("\n")
-                    .createStyle().setColorResId(R.color.text_secondary_light).apply()
+                    .createStyle().setColorResId(R.color.demo_photo_subtitle).apply()
                     .append(R.string.demo_photo_by).append(" ")
                     .append(photo.getOwner().getUsername());
             views.pagerTitle.setText(title.build());
@@ -240,20 +249,19 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
         final SimpleTracker gridTracker = new SimpleTracker() {
             @Override
             public View getViewAt(int pos) {
-                RecyclerView.ViewHolder holder = views.grid.findViewHolderForLayoutPosition(pos);
-                return holder == null ? null : PhotoListAdapter.getImage(holder);
+                return gridAdapter.getImage(pos);
             }
         };
 
         final SimpleTracker pagerTracker = new SimpleTracker() {
             @Override
             public View getViewAt(int pos) {
-                RecyclePagerAdapter.ViewHolder holder = pagerAdapter.getViewHolder(pos);
-                return holder == null ? null : PhotoPagerAdapter.getImage(holder);
+                return pagerAdapter.getImage(pos);
             }
         };
 
-        listAnimator = GestureTransitions.from(views.grid, gridTracker)
+        listAnimator = GestureTransitions
+                .from(views.grid, gridTracker)
                 .into(views.pager, pagerTracker);
 
         // Setting up and animating image transition
@@ -281,6 +289,7 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
     /**
      * Checks if system UI (status bar and navigation bar) is shown or we are in fullscreen mode.
      */
+    @SuppressWarnings("deprecation") // New insets controller API is not back-ported yet
     private boolean isSystemUiShown() {
         return (getWindow().getDecorView().getSystemUiVisibility()
                 & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0;
@@ -289,13 +298,11 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
     /**
      * Shows or hides system UI (status bar and navigation bar).
      */
+    @SuppressWarnings("deprecation") // New insets controller API is not back-ported yet
     private void showSystemUi(boolean show) {
-        int flags = 0;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            flags = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_IMMERSIVE;
-        }
+        int flags = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE;
 
         getWindow().getDecorView().setSystemUiVisibility(show ? 0 : flags);
     }
@@ -316,7 +323,7 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
 
         savedPhotoCount = gridAdapter.getCount();
 
-        savedPagerPosition = listAnimator.isLeaving() || pagerAdapter.getCount() == 0
+        savedPagerPosition = listAnimator.isLeaving() || pagerAdapter.getItemCount() == 0
                 ? NO_POSITION : views.pager.getCurrentItem();
 
         if (views.grid.getChildCount() > 0) {
@@ -367,8 +374,9 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
         }
 
         if (savedGridPosition != NO_POSITION && savedGridPosition < photos.size()) {
-            ((GridLayoutManager) views.grid.getLayoutManager())
-                    .scrollToPositionWithOffset(savedGridPosition, savedGridPositionFromTop);
+            GridLayoutManager manager =
+                    (GridLayoutManager) Objects.requireNonNull(views.grid.getLayoutManager());
+            manager.scrollToPositionWithOffset(savedGridPosition, savedGridPositionFromTop);
         }
 
         clearScreenState();
@@ -391,17 +399,34 @@ public class DemoActivity extends BaseSettingsActivity implements PhotoListAdapt
     }
 
 
+    @SuppressLint("Recycle")
+    private static void setAppBarStateListAnimator(@NonNull View view) {
+        // App bar elevation animation does not work unless we set state animator ourselves
+        final StateListAnimator sla = new StateListAnimator();
+        final int[] notLifted = new int[] { -R.attr.state_lifted };
+        final int[] lifted = new int[0];
+        final long dur = 150L;
+        final float elevation = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 8f, view.getResources().getDisplayMetrics());
+
+        sla.addState(notLifted, ObjectAnimator.ofFloat(view, "elevation", 0f).setDuration(dur));
+        sla.addState(lifted, ObjectAnimator.ofFloat(view, "elevation", elevation).setDuration(dur));
+
+        view.setStateListAnimator(sla);
+    }
+
+
     /**
      * Utility class to hold all views in a single place.
      */
-    private class ViewHolder {
+    private static class ViewHolder {
         final Toolbar toolbar;
         final View appBar;
         final ImageView appBarImage;
         final RecyclerView grid;
 
         final View fullBackground;
-        final ViewPager pager;
+        final ViewPager2 pager;
         final TextView pagerTitle;
         final Toolbar pagerToolbar;
         final GestureImageView fullImage;

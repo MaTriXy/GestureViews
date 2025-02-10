@@ -1,12 +1,22 @@
 package com.alexvasilkov.gestures.animation;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.ContextWrapper;
 import android.graphics.Matrix;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Build;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
+
+import androidx.annotation.FloatRange;
+import androidx.annotation.NonNull;
 
 import com.alexvasilkov.gestures.GestureController;
 import com.alexvasilkov.gestures.GestureControllerForPager;
@@ -24,9 +34,6 @@ import com.alexvasilkov.gestures.views.interfaces.GestureView;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import androidx.annotation.FloatRange;
-import androidx.annotation.NonNull;
 
 /**
  * Helper class to animate views from one position on screen to another.
@@ -73,6 +80,7 @@ public class ViewPositionAnimator {
     private float fromPivotY;
     private float toPivotX;
     private float toPivotY;
+    private final Rect windowRect = new Rect();
     private final RectF fromClip = new RectF();
     private final RectF toClip = new RectF();
     private final RectF fromBoundsClip = new RectF();
@@ -125,6 +133,8 @@ public class ViewPositionAnimator {
         toClipView = to instanceof ClipView ? (ClipView) to : null;
         toClipBounds = to instanceof ClipBounds ? (ClipBounds) to : null;
         animationEngine = new LocalAnimationEngine(toView);
+
+        getDisplaySize(toView.getContext(), windowRect);
 
         toController = to.getController();
         toController.addOnStateChangeListener(new GestureController.OnStateChangeListener() {
@@ -376,27 +386,6 @@ public class ViewPositionAnimator {
     }
 
     /**
-     * @return Animation duration
-     * @deprecated Use {@link Settings#getAnimationsDuration()} instead.
-     */
-    @SuppressWarnings("unused") // Public API
-    @Deprecated
-    public long getDuration() {
-        return toController.getSettings().getAnimationsDuration();
-    }
-
-    /**
-     * @param duration Animation duration
-     * @deprecated Use {@link Settings#setAnimationsDuration(long)} instead.
-     */
-    @SuppressWarnings("unused") // Public API
-    @Deprecated
-    public void setDuration(long duration) {
-        toController.getSettings().setAnimationsDuration(duration);
-    }
-
-
-    /**
      * @return Target (to) position as set by {@link #setToState(State, float)}.
      * Maybe useful to determine real animation position during exit gesture.
      * <p>
@@ -421,16 +410,6 @@ public class ViewPositionAnimator {
     }
 
     /**
-     * @return Current position
-     * @deprecated Use {@link #getPosition()} method instead.
-     */
-    @SuppressWarnings("unused") // Public API
-    @Deprecated
-    public float getPositionState() {
-        return position;
-    }
-
-    /**
      * @return Whether animator is in leaving state. Means that animation direction is
      * from final (to) position back to initial (from) position.
      */
@@ -451,7 +430,7 @@ public class ViewPositionAnimator {
      * @param position Target ('to') position
      * @see #getToPosition()
      */
-    public void setToState(State state, @FloatRange(from = 0f, to = 1f) float position) {
+    public void setToState(@NonNull State state, @FloatRange(from = 0f, to = 1f) float position) {
         if (position <= 0) {
             throw new IllegalArgumentException("'To' position cannot be <= 0");
         }
@@ -481,8 +460,11 @@ public class ViewPositionAnimator {
      * ({@code false})
      * @param animate Whether we should start animating from given position and in given direction
      */
-    public void setState(@FloatRange(from = 0f, to = 1f) float pos,
-            boolean leaving, boolean animate) {
+    public void setState(
+            @FloatRange(from = 0f, to = 1f) float pos,
+            boolean leaving,
+            boolean animate
+    ) {
         if (!isActivated) {
             throw new IllegalStateException(
                     "You should call enter(...) before calling setState(...)");
@@ -544,9 +526,7 @@ public class ViewPositionAnimator {
                 toClipView.clipView(skipClip ? null : clipRectTmp, state.getRotation());
             }
             if (toClipBounds != null) {
-                // Bounds clipping should stay longer in 'From' state
-                final float boundsClipPos = clipPosition * clipPosition;
-                MathUtils.interpolate(clipRectTmp, fromBoundsClip, toBoundsClip, boundsClipPos);
+                MathUtils.interpolate(clipRectTmp, fromBoundsClip, toBoundsClip, clipPosition);
                 toClipBounds.clipBounds(skipClip ? null : clipRectTmp);
             }
         }
@@ -687,8 +667,9 @@ public class ViewPositionAnimator {
         tmpMatrix.mapRect(toClip);
         toClip.offset(toPos.viewport.left - toPos.view.left, toPos.viewport.top - toPos.view.top);
 
-        // 'To' bounds clip is entire 'To' view rect in 'To' view coordinates
-        toBoundsClip.set(0f, 0f, toPos.view.width(), toPos.view.height());
+        // 'To' bounds clip is entire window rect in 'To' view coordinates
+        toBoundsClip.set(windowRect);
+        toBoundsClip.offset(-toPos.view.left, -toPos.view.top);
 
         isToUpdated = true;
 
@@ -741,7 +722,10 @@ public class ViewPositionAnimator {
         // 'From' bounds clip is a part of 'To' view which considered to be visible.
         // Meaning that if 'From' view is truncated in any direction this clipping should be
         // animated, otherwise it will look like part of 'From' view is instantly becoming visible.
-        fromBoundsClip.set(0f, 0f, toPos.view.width(), toPos.view.height());
+        fromBoundsClip.set(
+                windowRect.left - toPos.view.left, windowRect.top - toPos.view.top,
+                windowRect.right - toPos.view.left, windowRect.bottom - toPos.view.top
+        );
         fromBoundsClip.left = compareAndSetClipBound(
                 fromBoundsClip.left, fromPos.view.left, fromPos.visible.left, toPos.view.left);
         fromBoundsClip.top = compareAndSetClipBound(
@@ -765,6 +749,31 @@ public class ViewPositionAnimator {
         } else {
             return visiblePos - offset; // Returning 'From' view bound in 'To' view coordinates
         }
+    }
+
+
+    @SuppressWarnings("deprecation")
+    private static void getDisplaySize(Context context, Rect rect) {
+        WindowManager wm = getActivity(context).getWindowManager();
+        DisplayMetrics metrics = new DisplayMetrics();
+        if (Build.VERSION.SDK_INT >= 30) {
+            context.getDisplay().getRealMetrics(metrics);
+        } else if (Build.VERSION.SDK_INT >= 17) {
+            wm.getDefaultDisplay().getRealMetrics(metrics);
+        } else {
+            wm.getDefaultDisplay().getMetrics(metrics);
+        }
+        rect.set(0, 0, metrics.widthPixels, metrics.heightPixels);
+    }
+
+    private static Activity getActivity(Context context) {
+        while (context instanceof ContextWrapper) {
+            if (context instanceof Activity) {
+                return (Activity) context;
+            }
+            context = ((ContextWrapper) context).getBaseContext();
+        }
+        throw new IllegalArgumentException("Illegal context");
     }
 
 

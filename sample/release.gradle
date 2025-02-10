@@ -1,16 +1,4 @@
-final DIR = 'sample/signing'
-
 android {
-    playAccountConfigs {
-        config {
-            jsonFile = file('signing/play_account.json')
-        }
-    }
-
-    defaultConfig {
-        playAccountConfig = playAccountConfigs.config
-    }
-
     signingConfigs {
         debug {
             storeFile file('signing/debug.jks')
@@ -33,54 +21,64 @@ android {
     }
 }
 
+play {
+    serviceAccountCredentials.set(file('signing/play_account.json'))
+    track.set('alpha')
+}
+
 project.afterEvaluate {
     // Setting up 'publishSample' task
     // Note, that in order to work this task requires ENCRYPT_KEY and UPLOAD_KEYSTORE_PWD env vars
 
     final publish = 'publishSample'
-    final pack = 'packageRelease'
-    final upload = 'publishApkRelease'
 
     project.task publish
-    project.tasks[publish].dependsOn upload
-
-    project.tasks[pack].dependsOn 'decryptUploadKeystore'
-    project.tasks[pack].finalizedBy 'cleanUploadKeystore'
-
-    project.tasks[upload].dependsOn 'decryptPlayAccount'
-    project.tasks[upload].finalizedBy 'cleanPlayAccount'
+    project.tasks[publish].dependsOn 'decryptUploadKeystore'
+    project.tasks[publish].dependsOn 'decryptPlayAccount'
+    project.tasks[publish].dependsOn 'publishReleaseBundle'
+    project.tasks[publish].finalizedBy 'cleanUploadKeystore'
+    project.tasks[publish].finalizedBy 'cleanPlayAccount'
 }
 
 task decryptUploadKeystore {
     doFirst {
         println 'Decrypt upload keystore'
-        ("openssl aes-256-cbc -d" +
-                " -in $DIR/upload.jks.enc" +
-                " -out $DIR/upload.jks" +
-                " -k $System.env.ENCRYPT_KEY").execute()
+        decode('upload.jks')
     }
 }
 
 task cleanUploadKeystore {
     doLast {
         println 'Clean up upload keystore'
-        "rm $DIR/upload.jks".execute()
+        cleanup('upload.jks')
     }
 }
 
 task decryptPlayAccount {
     doFirst {
         println 'Decrypt Play account'
-        ("openssl aes-256-cbc -d" +
-                " -in $DIR/play_account.json.enc" +
-                " -out $DIR/play_account.json" +
-                " -k $System.env.ENCRYPT_KEY").execute()
+        decode('play_account.json')
     }
 }
 
 task cleanPlayAccount {
     doLast {
         println 'Clean up Play account'
-        "rm $DIR/play_account.json".execute()
+        cleanup('play_account.json')
     }
+}
+
+private static void decode(String file) {
+    def command = "openssl enc -aes-256-cbc -d -md sha512 -pbkdf2 -iter 100000 -salt" +
+            " -in sample/signing/${file}.enc -out sample/signing/$file -k $System.env.ENCRYPT_KEY"
+    def process = command.execute()
+    def error = process.err.text
+    if (error != null && !error.isEmpty()) {
+        println "Error:\n" + error
+        throw new RuntimeException("Error deconding $file",)
+    }
+}
+
+private static void cleanup(String file) {
+    "rm sample/signing/$file".execute()
 }

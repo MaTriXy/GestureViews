@@ -5,6 +5,9 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.alexvasilkov.android.commons.ui.Views;
 import com.alexvasilkov.gestures.sample.R;
 import com.alexvasilkov.gestures.sample.demo.utils.DemoGlideHelper;
@@ -13,15 +16,17 @@ import com.googlecode.flickrjandroid.photos.Photo;
 
 import java.util.List;
 
-import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.RecyclerView;
-
 public class PhotoListAdapter extends DefaultEndlessRecyclerAdapter<PhotoListAdapter.ViewHolder> {
+
+    private final long createdAt = System.currentTimeMillis();
+    private static final long noAnimationInterval = 300L;
 
     private List<Photo> photos;
     private boolean hasMore = true;
 
     private final OnPhotoListener listener;
+
+    private RecyclerView recyclerView;
 
     public PhotoListAdapter(OnPhotoListener listener) {
         super();
@@ -33,7 +38,11 @@ public class PhotoListAdapter extends DefaultEndlessRecyclerAdapter<PhotoListAda
         this.photos = photos;
         this.hasMore = hasMore;
 
-        RecyclerAdapterHelper.notifyChanges(this, old, photos);
+        if (old == null && System.currentTimeMillis() - createdAt < noAnimationInterval) {
+            notifyDataSetChanged();
+        } else {
+            RecyclerAdapterHelper.notifyChanges(this, old, photos);
+        }
     }
 
     @Override
@@ -70,7 +79,7 @@ public class PhotoListAdapter extends DefaultEndlessRecyclerAdapter<PhotoListAda
     }
 
     @Override
-    public void onViewRecycled(RecyclerView.ViewHolder holder) {
+    public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
         super.onViewRecycled(holder);
         if (holder instanceof ViewHolder) {
             DemoGlideHelper.clear(((ViewHolder) holder).image);
@@ -83,20 +92,32 @@ public class PhotoListAdapter extends DefaultEndlessRecyclerAdapter<PhotoListAda
         listener.onPhotoClick(pos);
     }
 
-    public static ImageView getImage(RecyclerView.ViewHolder holder) {
-        if (holder instanceof ViewHolder) {
-            return ((ViewHolder) holder).image;
-        } else {
-            return null;
-        }
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        this.recyclerView = recyclerView;
     }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        this.recyclerView = null;
+    }
+
+    public ImageView getImage(int pos) {
+        final RecyclerView.ViewHolder holder =
+                recyclerView == null ? null : recyclerView.findViewHolderForLayoutPosition(pos);
+        return holder == null ? null : ((ViewHolder) holder).image;
+    }
+
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         final ImageView image;
 
         ViewHolder(ViewGroup parent) {
             super(Views.inflate(parent, R.layout.demo_item_photo));
-            image = (ImageView) itemView;
+            image = itemView.findViewById(R.id.demo_item_image);
         }
     }
 

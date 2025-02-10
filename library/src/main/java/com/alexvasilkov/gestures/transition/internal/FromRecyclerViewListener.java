@@ -1,12 +1,14 @@
 package com.alexvasilkov.gestures.transition.internal;
 
+import android.util.Pair;
 import android.view.View;
 
-import com.alexvasilkov.gestures.transition.tracker.FromTracker;
-
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.RecyclerView.OnChildAttachStateChangeListener;
+
+import com.alexvasilkov.gestures.transition.tracker.FromTracker;
 
 public class FromRecyclerViewListener<ID> extends FromBaseListener<RecyclerView, ID> {
 
@@ -23,7 +25,7 @@ public class FromRecyclerViewListener<ID> extends FromBaseListener<RecyclerView,
         // Tracking attached list items to pick up newly visible views
         list.addOnChildAttachStateChangeListener(new OnChildAttachStateChangeListener() {
             @Override
-            public void onChildViewAttachedToWindow(View view) {
+            public void onChildViewAttachedToWindow(@NonNull View view) {
                 final ID id = getAnimator() == null ? null : getAnimator().getRequestedId();
 
                 // If view was requested and list is scrolled we should try to find the view again
@@ -41,7 +43,7 @@ public class FromRecyclerViewListener<ID> extends FromBaseListener<RecyclerView,
             }
 
             @Override
-            public void onChildViewDetachedFromWindow(View view) {
+            public void onChildViewDetachedFromWindow(@NonNull View view) {
                 // No-op
             }
         });
@@ -67,12 +69,31 @@ public class FromRecyclerViewListener<ID> extends FromBaseListener<RecyclerView,
             if (holder != null) {
                 final View view = holder.itemView;
                 offset -= isHorizontal ? view.getWidth() / 2 : view.getHeight() / 2;
+            } else {
+                // The view may not be available right away, trying to predict it's size
+                final Pair<Integer, Integer> averageSize = getAverageChildSize(list);
+                offset -= isHorizontal ? averageSize.first / 2 : averageSize.second / 2;
             }
 
             manager.scrollToPositionWithOffset(pos, offset);
         } else {
             list.scrollToPosition(pos);
         }
+    }
+
+    private Pair<Integer, Integer> getAverageChildSize(RecyclerView list) {
+        int size = list.getChildCount();
+        if (size == 0) {
+            return new Pair<>(0, 0);
+        }
+
+        int totalW = 0;
+        int totalH = 0;
+        for (int i = 0; i < size; i++) {
+            totalW += list.getChildAt(i).getWidth();
+            totalH += list.getChildAt(i).getHeight();
+        }
+        return new Pair<>(totalW / size, totalH / size);
     }
 
 }

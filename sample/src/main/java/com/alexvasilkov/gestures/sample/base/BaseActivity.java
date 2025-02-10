@@ -1,21 +1,25 @@
 package com.alexvasilkov.gestures.sample.base;
 
+import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import com.alexvasilkov.android.commons.state.InstanceStateManager;
-import com.alexvasilkov.android.commons.ui.Views;
-import com.alexvasilkov.events.Events;
-import com.alexvasilkov.gestures.sample.R;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import com.alexvasilkov.android.commons.state.InstanceStateManager;
+import com.alexvasilkov.android.commons.ui.Views;
+import com.alexvasilkov.events.Events;
+import com.alexvasilkov.gestures.sample.R;
+import com.google.android.material.color.MaterialColors;
 
 public abstract class BaseActivity extends AppCompatActivity {
 
@@ -34,7 +38,7 @@ public abstract class BaseActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
         InstanceStateManager.saveInstanceState(this, outState);
         super.onSaveInstanceState(outState);
     }
@@ -48,25 +52,29 @@ public abstract class BaseActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         if (infoTextId != 0) {
+            final Context context = getSupportActionBar().getThemedContext();
+
             MenuItem item = menu.add(Menu.NONE, R.id.menu_info, Menu.NONE, R.string.menu_info);
-            item.setIcon(R.drawable.ic_info_outline_white_24dp);
             item.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+
+            Drawable ic = ContextCompat.getDrawable(context, R.drawable.ic_info_outline_white_24dp);
+            ic.setTint(MaterialColors.getColor(context, R.attr.colorOnSurface, "Error"));
+            item.setIcon(ic);
         }
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case android.R.id.home:
-                onBackPressed();
-                return true;
-            case R.id.menu_info:
-                showInfoDialog();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
+        int itemId = item.getItemId();
+        if (itemId == android.R.id.home) {
+            onBackPressed();
+            return true;
+        } else if (itemId == R.id.menu_info) {
+            showInfoDialog();
+            return true;
         }
+        return super.onOptionsItemSelected(item);
     }
 
     @NonNull

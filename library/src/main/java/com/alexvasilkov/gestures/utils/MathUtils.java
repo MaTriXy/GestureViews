@@ -1,16 +1,19 @@
 package com.alexvasilkov.gestures.utils;
 
 import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.graphics.RectF;
 
-import com.alexvasilkov.gestures.State;
-
+import androidx.annotation.NonNull;
 import androidx.annotation.Size;
+
+import com.alexvasilkov.gestures.State;
 
 public class MathUtils {
 
     private static final Matrix tmpMatrix = new Matrix();
     private static final Matrix tmpMatrixInverse = new Matrix();
+    private static final RectF tmpRect = new RectF();
 
     private MathUtils() {}
 
@@ -47,7 +50,12 @@ public class MathUtils {
      * @param end End rectangle
      * @param factor Factor
      */
-    public static void interpolate(RectF out, RectF start, RectF end, float factor) {
+    public static void interpolate(
+            @NonNull RectF out,
+            @NonNull RectF start,
+            @NonNull RectF end,
+            float factor
+    ) {
         out.left = interpolate(start.left, end.left, factor);
         out.top = interpolate(start.top, end.top, factor);
         out.right = interpolate(start.right, end.right, factor);
@@ -62,9 +70,17 @@ public class MathUtils {
      * @param start Start state
      * @param end End state
      * @param factor Factor
+     * @deprecated Provide pivot point explicitly with
+     * {@link #interpolate(State, State, float, float, State, float, float, float)}
      */
     @SuppressWarnings("WeakerAccess") // Public API
-    public static void interpolate(State out, State start, State end, float factor) {
+    @Deprecated
+    public static void interpolate(
+            @NonNull State out,
+            @NonNull State start,
+            @NonNull State end,
+            float factor
+    ) {
         interpolate(out, start, start.getX(), start.getY(), end, end.getX(), end.getY(), factor);
     }
 
@@ -83,8 +99,16 @@ public class MathUtils {
      * @param endPivotY Pivot point's Y coordinate in end state coordinates
      * @param factor Factor
      */
-    public static void interpolate(State out, State start, float startPivotX, float startPivotY,
-            State end, float endPivotX, float endPivotY, float factor) {
+    public static void interpolate(
+            @NonNull State out,
+            @NonNull State start,
+            float startPivotX,
+            float startPivotY,
+            @NonNull State end,
+            float endPivotX,
+            float endPivotY,
+            float factor
+    ) {
         out.set(start);
 
         if (!State.equals(start.getZoom(), end.getZoom())) {
@@ -117,18 +141,27 @@ public class MathUtils {
             out.rotateTo(rotation, startPivotX, startPivotY);
         }
 
-        float dx = interpolate(0, endPivotX - startPivotX, factor);
-        float dy = interpolate(0, endPivotY - startPivotY, factor);
+        float dx = interpolate(0f, endPivotX - startPivotX, factor);
+        float dy = interpolate(0f, endPivotY - startPivotY, factor);
         out.translateBy(dx, dy);
     }
 
-    public static void computeNewPosition(@Size(2) float[] point,
-            State initialState, State finalState) {
+    public static void computeNewPosition(
+            @NonNull @Size(2) float[] point,
+            @NonNull State initialState,
+            @NonNull State finalState
+    ) {
         initialState.get(tmpMatrix);
         tmpMatrix.invert(tmpMatrixInverse);
         tmpMatrixInverse.mapPoints(point);
         finalState.get(tmpMatrix);
         tmpMatrix.mapPoints(point);
+    }
+
+    public static void mapIntRect(@NonNull Matrix matrix, @NonNull Rect rect) {
+        tmpRect.set(rect);
+        matrix.mapRect(tmpRect);
+        rect.set((int) tmpRect.left, (int) tmpRect.top, (int) tmpRect.right, (int) tmpRect.bottom);
     }
 
 }

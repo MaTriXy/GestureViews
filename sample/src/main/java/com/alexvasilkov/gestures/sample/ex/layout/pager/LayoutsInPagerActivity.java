@@ -2,13 +2,15 @@ package com.alexvasilkov.gestures.sample.ex.layout.pager;
 
 import android.os.Bundle;
 
+import androidx.viewpager.widget.ViewPager;
+
 import com.alexvasilkov.gestures.commons.RecyclePagerAdapter;
 import com.alexvasilkov.gestures.sample.R;
 import com.alexvasilkov.gestures.sample.base.BaseSettingsActivity;
 import com.alexvasilkov.gestures.sample.ex.utils.Painting;
 import com.alexvasilkov.gestures.views.GestureFrameLayout;
 
-import androidx.viewpager.widget.ViewPager;
+import java.util.Objects;
 
 /**
  * Simple example demonstrates usage of {@link GestureFrameLayout} within ViewPager.<br>
@@ -29,6 +31,7 @@ public class LayoutsInPagerActivity extends BaseSettingsActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.layout_pager_screen);
+        setTitle(R.string.example_layouts_in_pager);
 
         final Painting[] paintings = Painting.list(getResources());
 
@@ -41,7 +44,7 @@ public class LayoutsInPagerActivity extends BaseSettingsActivity {
     @Override
     protected void onSettingsChanged() {
         // Applying settings from toolbar menu, see BaseExampleActivity
-        viewPager.getAdapter().notifyDataSetChanged();
+        Objects.requireNonNull(viewPager.getAdapter()).notifyDataSetChanged();
     }
 
 }

@@ -3,6 +3,8 @@ package com.alexvasilkov.gestures.sample.demo.utils;
 import android.graphics.drawable.Drawable;
 import android.widget.ImageView;
 
+import androidx.annotation.Nullable;
+
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestBuilder;
 import com.bumptech.glide.load.DataSource;
@@ -17,8 +19,6 @@ import com.bumptech.glide.request.transition.Transition;
 import com.bumptech.glide.request.transition.TransitionFactory;
 import com.googlecode.flickrjandroid.photos.Photo;
 
-import androidx.annotation.Nullable;
-
 public class DemoGlideHelper {
 
     private static final Transition<Drawable> TRANSITION = (current, adapter) -> {
@@ -26,7 +26,7 @@ public class DemoGlideHelper {
             ImageView image = (ImageView) adapter.getView();
             if (image.getDrawable() == null) {
                 image.setAlpha(0f);
-                image.animate().alpha(1f);
+                image.animate().alpha(1f).setDuration(150L);
             }
         }
         return false;
@@ -60,9 +60,6 @@ public class DemoGlideHelper {
     }
 
     public static void loadFlickrFull(Photo photo, ImageView image, LoadingListener listener) {
-        final String photoUrl = photo.getLargeSize() == null
-                ? photo.getMediumUrl() : photo.getLargeUrl();
-
         final RequestOptions options = new RequestOptions()
                 .diskCacheStrategy(DiskCacheStrategy.DATA)
                 .override(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
@@ -73,7 +70,7 @@ public class DemoGlideHelper {
                 .apply(options);
 
         Glide.with(image)
-                .load(photoUrl)
+                .load(photo.getLarge1600Url())
                 .apply(new RequestOptions().apply(options).placeholder(image.getDrawable()))
                 .thumbnail(thumbRequest)
                 .listener(new RequestListenerWrapper<>(listener))

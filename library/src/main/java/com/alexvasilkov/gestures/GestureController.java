@@ -2,6 +2,7 @@ package com.alexvasilkov.gestures;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.view.GestureDetector;
@@ -12,19 +13,22 @@ import android.view.ViewConfiguration;
 import android.view.ViewParent;
 import android.widget.OverScroller;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.alexvasilkov.gestures.internal.AnimationEngine;
 import com.alexvasilkov.gestures.internal.ExitController;
 import com.alexvasilkov.gestures.internal.MovementBounds;
 import com.alexvasilkov.gestures.internal.detectors.RotationGestureDetector;
 import com.alexvasilkov.gestures.internal.detectors.ScaleGestureDetectorFixed;
 import com.alexvasilkov.gestures.utils.FloatScroller;
+import com.alexvasilkov.gestures.utils.GravityUtils;
 import com.alexvasilkov.gestures.utils.MathUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import static java.lang.Float.isNaN;
 
 /**
  * Handles touch events to update view's position state ({@link State}) based on current
@@ -60,6 +64,7 @@ public class GestureController implements View.OnTouchListener {
 
     // Temporary objects
     private static final PointF tmpPointF = new PointF();
+    private static final Point tmpPoint = new Point();
     private static final RectF tmpRectF = new RectF();
     private static final float[] tmpPointArr = new float[2];
 
@@ -176,20 +181,8 @@ public class GestureController implements View.OnTouchListener {
      * @see #addOnStateChangeListener(OnStateChangeListener)
      */
     @SuppressWarnings({ "unused", "WeakerAccess" }) // Public API
-    public void removeOnStateChangeListener(OnStateChangeListener listener) {
+    public void removeOnStateChangeListener(@NonNull OnStateChangeListener listener) {
         stateListeners.remove(listener);
-    }
-
-    /**
-     * @param enabled Whether long press should be enabled or not
-     * @deprecated In order to enable long clicks you should either set
-     * {@link View#setOnLongClickListener(View.OnLongClickListener)} or use
-     * {@link View#setLongClickable(boolean)}.
-     */
-    @SuppressWarnings({ "unused", "WeakerAccess" }) // Public API
-    @Deprecated
-    public void setLongPressEnabled(boolean enabled) {
-        targetView.setLongClickable(true);
     }
 
     /**
@@ -200,6 +193,7 @@ public class GestureController implements View.OnTouchListener {
      *
      * @return Gesture view's settings
      */
+    @NonNull
     public Settings getSettings() {
         return settings;
     }
@@ -213,6 +207,7 @@ public class GestureController implements View.OnTouchListener {
      *
      * @return Current state
      */
+    @NonNull
     public State getState() {
         return state;
     }
@@ -221,6 +216,7 @@ public class GestureController implements View.OnTouchListener {
      * @return State controller to get computed min/max zoom levels or calculate movement area
      */
     @SuppressWarnings("WeakerAccess") // Public API
+    @NonNull
     public StateController getStateController() {
         return stateController;
     }
@@ -281,7 +277,7 @@ public class GestureController implements View.OnTouchListener {
      * @return {@code true} if animation started, {@code false} otherwise. Animation may
      * not be started if image already withing the bounds.
      */
-    @SuppressWarnings("WeakerAccess") // Public API
+    @SuppressWarnings({ "WeakerAccess", "UnusedReturnValue" }) // Public API
     public boolean animateKeepInBounds() {
         return animateStateTo(state, true);
     }
@@ -294,6 +290,7 @@ public class GestureController implements View.OnTouchListener {
      * not be started if end state is {@code null} or equals to current state (after bounds
      * restrictions are applied).
      */
+    @SuppressWarnings("UnusedReturnValue")
     public boolean animateStateTo(@Nullable State endState) {
         return animateStateTo(endState, true);
     }
@@ -301,6 +298,15 @@ public class GestureController implements View.OnTouchListener {
     private boolean animateStateTo(@Nullable State endState, boolean keepInBounds) {
         if (endState == null) {
             return false;
+        }
+
+        stopAllAnimations();
+
+        // Ensure we have a correct pivot point
+        if (isNaN(pivotX) || isNaN(pivotY)) {
+            GravityUtils.getDefaultPivot(settings, tmpPoint);
+            pivotX = tmpPoint.x;
+            pivotY = tmpPoint.y;
         }
 
         State endStateRestricted = null;
@@ -316,20 +322,16 @@ public class GestureController implements View.OnTouchListener {
             return false; // Nothing to animate
         }
 
-        stopAllAnimations();
-
         isAnimatingInBounds = keepInBounds;
         stateStart.set(state);
         stateEnd.set(endStateRestricted);
 
         // Computing new position of pivot point for correct state interpolation
-        if (!Float.isNaN(pivotX) && !Float.isNaN(pivotY)) {
-            tmpPointArr[0] = pivotX;
-            tmpPointArr[1] = pivotY;
-            MathUtils.computeNewPosition(tmpPointArr, stateStart, stateEnd);
-            endPivotX = tmpPointArr[0];
-            endPivotY = tmpPointArr[1];
-        }
+        tmpPointArr[0] = pivotX;
+        tmpPointArr[1] = pivotY;
+        MathUtils.computeNewPosition(tmpPointArr, stateStart, stateEnd);
+        endPivotX = tmpPointArr[0];
+        endPivotY = tmpPointArr[1];
 
         stateScroller.setDuration(settings.getAnimationsDuration());
         stateScroller.startScroll(0f, 1f);
@@ -381,6 +383,8 @@ public class GestureController implements View.OnTouchListener {
         isAnimatingInBounds = false;
         pivotX = Float.NaN;
         pivotY = Float.NaN;
+        endPivotX = Float.NaN;
+        endPivotY = Float.NaN;
         notifyStateSourceChanged();
     }
 
@@ -591,6 +595,10 @@ public class GestureController implements View.OnTouchListener {
             return false;
         }
 
+        if (isNaN(dx) || isNaN(dy)) {
+            return false; // Invalid scroll, nothing we can do
+        }
+
         boolean scrollConsumed = exitController.onScroll(-dx, -dy);
         if (scrollConsumed) {
             return true;
@@ -725,6 +733,9 @@ public class GestureController implements View.OnTouchListener {
         }
 
         final float scaleFactor = detector.getScaleFactor();
+        if (isNaN(scaleFactor) || isNaN(detector.getFocusX()) || isNaN(detector.getFocusY())) {
+            return false; // Invalid scale, nothing we can do
+        }
 
         boolean scaleConsumed = exitController.onScale(scaleFactor);
         if (scaleConsumed) {
@@ -820,13 +831,12 @@ public class GestureController implements View.OnTouchListener {
                 stateScroller.computeScroll();
                 float factor = stateScroller.getCurr();
 
-                if (Float.isNaN(pivotX) || Float.isNaN(pivotY)
-                        || Float.isNaN(endPivotX) || Float.isNaN(endPivotY)) {
-                    MathUtils.interpolate(state, stateStart, stateEnd, factor);
-                } else {
-                    MathUtils.interpolate(state, stateStart, pivotX, pivotY,
-                            stateEnd, endPivotX, endPivotY, factor);
-                }
+                MathUtils.interpolate(
+                        state,
+                        stateStart, pivotX, pivotY,
+                        stateEnd, endPivotX, endPivotY,
+                        factor
+                );
 
                 shouldProceed = true;
 
@@ -851,6 +861,7 @@ public class GestureController implements View.OnTouchListener {
     /**
      * State changes listener.
      */
+    @SuppressWarnings("unused")
     public interface OnStateChangeListener {
         void onStateChanged(State state);
 
@@ -878,7 +889,7 @@ public class GestureController implements View.OnTouchListener {
     /**
      * Listener for different touch events.
      */
-    @SuppressWarnings("WeakerAccess") // Public API
+    @SuppressWarnings({ "WeakerAccess", "EmptyMethod", "SameReturnValue", "unused" }) // Public API
     public interface OnGestureListener {
         /**
          * @param event Motion event

@@ -2,7 +2,7 @@
 <merge
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context=".ex.list.complex.BaseComplexListActivity">
+    tools:context=".ex.transitions.complex.BaseComplexListActivity">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/complex_list"
@@ -19,7 +19,7 @@
         android:id="@+id/complex_pager_background"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/primary_light"
+        android:background="@color/window_background"
         android:visibility="invisible" />
 
     <androidx.viewpager.widget.ViewPager

@@ -1,10 +1,14 @@
 package com.alexvasilkov.gestures.sample.ex.image.crop;
 
+import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+
+import androidx.core.content.ContextCompat;
 
 import com.alexvasilkov.gestures.commons.CropAreaView;
 import com.alexvasilkov.gestures.sample.R;
@@ -12,6 +16,7 @@ import com.alexvasilkov.gestures.sample.base.BaseActivity;
 import com.alexvasilkov.gestures.sample.ex.utils.GlideHelper;
 import com.alexvasilkov.gestures.sample.ex.utils.Painting;
 import com.alexvasilkov.gestures.views.GestureImageView;
+import com.google.android.material.color.MaterialColors;
 
 /**
  * This example demonstrates image cropping using {@link CropAreaView} as overlay.
@@ -32,6 +37,7 @@ public class ImageCropActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.image_crop_screen);
+        setTitle(R.string.example_image_cropping);
         getSupportActionBarNotNull().setDisplayHomeAsUpEnabled(true);
 
         imageView = findViewById(R.id.image_crop_viewer);
@@ -67,9 +73,14 @@ public class ImageCropActivity extends BaseActivity {
         super.onCreateOptionsMenu(menu);
 
         if (resultView.getVisibility() != View.VISIBLE) {
+            final Context context = getSupportActionBar().getThemedContext();
+
             MenuItem crop = menu.add(Menu.NONE, R.id.menu_crop, 0, R.string.menu_crop);
             crop.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-            crop.setIcon(R.drawable.ic_check_white_24dp);
+
+            Drawable ic = ContextCompat.getDrawable(context, R.drawable.ic_check_white_24dp);
+            ic.setTint(MaterialColors.getColor(context, R.attr.colorOnSurface, "Error"));
+            crop.setIcon(ic);
         }
 
         return true;
